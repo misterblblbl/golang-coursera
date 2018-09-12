@@ -4,7 +4,7 @@ import "fmt"
 
 func printSize(size int64) string {
 	if size == 0 {
-		return "(empty)"
+		return " (empty)"
 	}
 
 	return fmt.Sprintf(" (%vb)", size)

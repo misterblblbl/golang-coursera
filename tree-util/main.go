@@ -25,11 +25,6 @@ func checkIgnoredFile(file string) bool {
 }
 
 func printDir(output io.Writer, path string, openedDirs map[int]bool, depth int, printFiles bool) {
-	stats, err := os.Stat(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	file, err := os.Open(path)
 	defer file.Close()
 	if err != nil {
@@ -59,7 +54,7 @@ func printDir(output io.Writer, path string, openedDirs map[int]bool, depth int,
 
 			printDir(output, nextPath, openedDirs, depth+1, printFiles)
 		} else if printFiles {
-			fileSize := printSize(stats.Size())
+			fileSize := printSize(file.Size())
 
 			fmt.Fprintf(output, "%s%s%s\n", prefix, fileName, fileSize)
 		}
