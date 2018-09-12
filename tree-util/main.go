@@ -8,44 +8,23 @@ import (
 	"sort"
 )
 
-type byFilename []os.FileInfo
-
-func (fi byFilename) Len() int {
-	return len(fi)
+var ignoredFiles = []string{
+	".DS_Store",
+	".gitignore",
 }
 
-func (fi byFilename) Swap(i, j int) {
-	fi[i], fi[j] = fi[j], fi[i]
-}
-
-func (fi byFilename) Less(i, j int) bool {
-	return fi[i].Name() < fi[j].Name()
-}
-
-func getPrefix(depth int, isLast bool, openedDirs map[int]bool) string {
-	prefix := "├───"
-	tabulation := ""
-
-	if isLast {
-		prefix = "└───"
-	}
-
-	for level := 0; level < depth; level++ {
-		dirOpened, ok := openedDirs[level]
-		if ok {
-			nextTab := "\t"
-			if dirOpened {
-				nextTab = "│\t"
-			}
-
-			tabulation = tabulation + nextTab
+func checkIgnoredFile(file string) bool {
+	var isIgnored bool
+	for _, ignored := range ignoredFiles {
+		if ignored == file {
+			isIgnored = true
 		}
 	}
 
-	return tabulation + prefix
+	return isIgnored
 }
 
-func printDir(output io.Writer, path string, openedDirs map[int]bool, depth int) {
+func printDir(output io.Writer, path string, openedDirs map[int]bool, depth int, printFiles bool) {
 	stats, err := os.Stat(path)
 	if err != nil {
 		log.Fatal(err)
@@ -57,39 +36,47 @@ func printDir(output io.Writer, path string, openedDirs map[int]bool, depth int)
 		log.Fatal(err)
 	}
 
-	if mode := stats.Mode(); mode.IsDir() {
-		fileInfo, _ := file.Readdir(-1)
-		openedDirs[depth] = true
-		sort.Sort(byFilename(fileInfo))
+	fileInfo, _ := file.Readdir(-1)
+	if !printFiles {
+		fileInfo = filterDirs(fileInfo)
+	}
+	openedDirs[depth] = true
+	sort.Sort(byFilename(fileInfo))
 
-		for i, file := range fileInfo {
-			isLast := i+1 == len(fileInfo)
-			prefix := getPrefix(depth, isLast, openedDirs)
-			openedDirs[depth] = !isLast
-
-			if file.IsDir() {
-				nextPath := fmt.Sprintf("%s/%s", path, file.Name())
-				fmt.Fprintf(output, "%s%s\n", prefix, file.Name())
-
-				printDir(output, nextPath, openedDirs, depth+1)
-			} else {
-				if file.Name() != ".DS_Store" {
-					fmt.Fprintf(output, "%s%s\n", prefix, file.Name())
-				}
-			}
+	for i, file := range fileInfo {
+		fileName := file.Name()
+		if checkIgnoredFile(fileName) {
+			continue
 		}
-	} else {
-		prefix := getPrefix(depth, false, openedDirs)
 
-		if file.Name() != ".DS_Store" {
-			fmt.Fprintf(output, "%s%s\n", prefix, file.Name())
+		isLast := i+1 == len(fileInfo)
+		openedDirs[depth] = !isLast
+		prefix := getPrefix(depth, isLast, openedDirs)
+
+		if file.IsDir() {
+			fmt.Fprintf(output, "%s%s\n", prefix, fileName)
+			nextPath := fmt.Sprintf("%s/%s", path, fileName)
+
+			printDir(output, nextPath, openedDirs, depth+1, printFiles)
+		} else if printFiles {
+			fileSize := printSize(stats.Size())
+
+			fmt.Fprintf(output, "%s%s%s\n", prefix, fileName, fileSize)
 		}
 	}
 }
 
 func dirTree(output io.Writer, path string, printFiles bool) error {
 	openedDirs := map[int]bool{}
-	printDir(output, path, openedDirs, 0)
+
+	stats, err := os.Stat(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if mode := stats.Mode(); mode.IsDir() {
+		printDir(output, path, openedDirs, 0, printFiles)
+	}
 
 	return nil
 }
