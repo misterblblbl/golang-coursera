@@ -45,6 +45,7 @@ var OverheatUnlock = func() {
 var DataSignerMd5 = func(data string) string {
 	OverheatLock()
 	defer OverheatUnlock()
+
 	data += DataSignerSalt
 	dataHash := fmt.Sprintf("%x", md5.Sum([]byte(data)))
 	time.Sleep(10 * time.Millisecond)
