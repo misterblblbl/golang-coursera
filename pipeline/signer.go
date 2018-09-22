@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -38,6 +40,7 @@ func SingleHash(in, out chan interface{}) {
 		wg.Add(1)
 		go singleHashJob(i, out, wg, mu)
 	}
+	wg.Wait()
 }
 
 func singleHashJob(in interface{}, out chan interface{}, wg *sync.WaitGroup, mu *sync.Mutex) {
@@ -59,6 +62,53 @@ func singleHashJob(in interface{}, out chan interface{}, wg *sync.WaitGroup, mu 
 
 func asyncCrc32Signer(data string, out chan string) {
 	out <- DataSignerCrc32(data)
+}
+
+func MultiHash(in, out chan interface{}) {
+	const TH int = 6
+	wg := &sync.WaitGroup{}
+
+	for i := range in {
+		wg.Add(1)
+		go multiHashJob(i.(string), out, TH, wg)
+	}
+	wg.Wait()
+}
+
+func multiHashJob(in string, out chan interface{}, th int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	mu := &sync.Mutex{}
+	jobWg := &sync.WaitGroup{}
+	combinedChunks := make([]string, th)
+
+	for i := 0; i < th; i++ {
+		jobWg.Add(1)
+		data := strconv.Itoa(i) + in
+
+		go func(acc []string, index int, data string, jobWg *sync.WaitGroup, mu *sync.Mutex) {
+			defer jobWg.Done()
+			data = DataSignerCrc32(data)
+
+			mu.Lock()
+			acc[index] = data
+			mu.Unlock()
+		}(combinedChunks, i, data, jobWg, mu)
+	}
+
+	jobWg.Wait()
+	out <- strings.Join(combinedChunks, "")
+}
+
+func CombineResults(in, out chan interface{}) {
+	var result []string
+
+	for i := range in {
+		result = append(result, i.(string))
+	}
+
+	sort.Strings(result)
+	out <- strings.Join(result, "_")
 }
 
 func main() {
