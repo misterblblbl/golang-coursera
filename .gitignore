@@ -4,4 +4,8 @@
 .vscode
 .vault
 
+cpu.out
+mem.out
+perf.test
+
 id_rsa.*
